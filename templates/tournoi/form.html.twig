@@ -1,0 +1,216 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ edition ? (estBrouillon ? 'Reprendre' : 'Modifier') : 'Créer' }} un tournoi | OwoFofo{% endblock %}
+
+{% block body %}
+{# Assistant de création/édition de tournoi (wizard en 2 étapes). #}
+<section
+    class="tournoi-wizard card border-0"
+    id="tournoi-wizard"
+    data-upload-url="{{ path('app_tournoi_upload_image') }}"
+    data-upsert-element-url="{{ path('app_tournoi_wizard_upsert_element') }}"
+    data-delete-element-url="{{ path('app_tournoi_wizard_delete_element') }}"
+    data-profile-url="{{ path('app_compte') }}"
+    data-autosave-elements="{{ (not edition or estBrouillon) ? '1' : '0' }}"
+    data-mode-id="{{ tournoiForm.mode.vars.id }}"
+    data-nom-id="{{ tournoiForm.nom.vars.id }}"
+    data-description-id="{{ tournoiForm.description.vars.id }}"
+    data-cover-id="{{ tournoiForm.coverImageUrl.vars.id }}"
+    data-theme-a-id="{{ tournoiForm.nomThemeA.vars.id }}"
+    data-theme-b-id="{{ tournoiForm.nomThemeB.vars.id }}"
+    data-elements-id="{{ tournoiForm.elementsPayload.vars.  id }}"
+    data-tournoi-id="{{ tournoi is defined and tournoi.id ? tournoi.id : '' }}"
+    data-mode-value="{{ tournoi is defined ? tournoi.mode.value : '' }}"
+    data-initial-elements="{{ (tournoiForm.elementsPayload.vars.value ?: '[]')|e('html_attr') }}"
+>
+    <div class="card-body p-3 p-lg-4">
+        <h1 class="h4 mb-3">{{ edition ? (estBrouillon ? 'Reprendre un brouillon' : 'Modifier le tournoi') : 'Créer un tournoi' }}</h1>
+
+        {# Formulaire Symfony principal du wizard. #}
+        {{ form_start(tournoiForm, {attr: {id: 'tournoi-wizard-form', autocomplete: 'off'}}) }}
+            {{ form_errors(tournoiForm) }}
+
+            {# Navigation des étapes du wizard. #}
+            <nav class="wizard-nav mb-4" aria-label="Étapes du formulaire tournoi">
+                <button type="button" class="wizard-tab is-active" data-tab-target="tournoi">Tournoi</button>
+                <span class="wizard-sep">|</span>
+                <button type="button" class="wizard-tab" data-tab-target="elements">Éléments</button>
+            </nav>
+
+            {# Étape 1: données générales du tournoi. #}
+            <section class="wizard-panel" data-tab-panel="tournoi">
+                <div class="row g-3">
+                    <div class="col-12">
+                        {{ form_row(tournoiForm.nom) }}
+                    </div>
+                    <div class="col-12">
+                        {{ form_row(tournoiForm.description) }}
+                    </div>
+                </div>
+
+                <div class="d-none">{{ form_widget(tournoiForm.coverImageUrl) }}</div>
+
+                <div class="upload-box mb-3" id="cover-upload-box">
+                    <input type="file" id="cover-upload-input" class="d-none" accept="image/png,image/jpeg,image/webp,image/gif">
+                    <button type="button" class="upload-trigger" id="cover-upload-trigger">Glisse-dépose une image ou clique pour en choisir une</button>
+                    <span class="upload-status" id="cover-upload-status"></span>
+                </div>
+
+                <div class="cover-preview" id="cover-preview-zone">
+                    <img src="" alt="Aperçu de la couverture" id="cover-preview-image" class="d-none">
+                    <div class="cover-preview-placeholder" id="cover-preview-placeholder">
+                        <span>Image de couverture</span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-12 col-md-6">
+                        {{ form_row(tournoiForm.mode) }}
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1 d-none" id="themes-row">
+                    <div class="col-12 col-md-6" id="themes-container-a">
+                        {{ form_row(tournoiForm.nomThemeA) }}
+                    </div>
+                    <div class="col-12 col-md-6" id="themes-container-b">
+                        {{ form_row(tournoiForm.nomThemeB) }}
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-danger" id="btn-go-elements">Éléments &gt;</button>
+                </div>
+            </section>
+
+            {# Étape 2: gestion des éléments (images/vidéos + thèmes). #}
+            <section class="wizard-panel d-none" data-tab-panel="elements">
+                <div class="choices-type-header">Type</div>
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <button type="button" class="media-type-card is-active" data-media-choice="image">
+                            <span class="media-type-icon">▣</span>
+                            <span>Image</span>
+                        </button>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <button type="button" class="media-type-card" data-media-choice="video">
+                            <span class="media-type-icon">▶</span>
+                            <span>Vidéo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="choice-image-group" class="choice-media-group">
+                    <input type="hidden" id="choice-image-url">
+                    <div class="upload-box upload-box-compact" id="choice-image-upload-box">
+                        <input type="file" id="choice-image-upload-input" class="d-none" accept="image/png,image/jpeg,image/webp,image/gif">
+                        <button type="button" class="upload-trigger" id="choice-image-upload-trigger">Glisse-dépose une image ou clique pour en choisir une</button>
+                        <span class="upload-status" id="choice-image-upload-status"></span>
+                    </div>
+                    <div class="choice-image-preview mt-2" id="choice-image-preview-zone">
+                        <img src="" alt="Aperçu de l'élément" id="choice-image-preview-image" class="d-none">
+                        <div class="choice-image-preview-placeholder" id="choice-image-preview-placeholder">
+                            <span>Aperçu de l'élément</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="choice-video-group" class="choice-media-group d-none">
+                    <div class="row g-2 align-items-end justify-content-center">
+                        <div class="col-12 col-lg-8">
+                            <label class="form-label" for="choice-video-url">URL YouTube</label>
+                            <input type="url" id="choice-video-url" class="form-control" placeholder="https://www.youtube.com/watch?v=...">
+                        </div>
+                    </div>
+
+                    <div class="choice-image-preview choice-video-preview mt-2" id="choice-video-preview-zone">
+                        <iframe
+                            id="choice-video-preview-frame"
+                            class="d-none"
+                            src=""
+                            title="Aperçu vidéo"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowfullscreen
+                            referrerpolicy="strict-origin-when-cross-origin"
+                        ></iframe>
+                        <div class="choice-video-preview-placeholder" id="choice-video-preview-placeholder">
+                            <span>L'aperçu de la vidéo s'affichera ici</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mt-2">
+                    <div class="col-12 col-lg-8">
+                        <label class="form-label" for="choice-title">Nom</label>
+                        <input type="text" id="choice-title" class="form-control" maxlength="255" placeholder="Nom de l'élément">
+                    </div>
+                    <div class="col-12 col-lg-4" id="choice-theme-group">
+                        <label class="form-label">Thème</label>
+                        <div class="theme-choice-buttons">
+                            <div class="form-check">
+                                <input type="radio" name="choice-theme-slot" id="choice-theme-a" value="A" class="form-check-input">
+                                <label for="choice-theme-a" class="form-check-label" id="choice-theme-a-label">Thème A</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" name="choice-theme-slot" id="choice-theme-b" value="B" class="form-check-input">
+                                <label for="choice-theme-b" class="form-check-label" id="choice-theme-b-label">Thème B</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-danger ps-4 pe-4" id="btn-add-choice">+ Ajouter</button>
+                </div>
+
+                {% if peutEnregistrerBrouillon %}
+                    {# Action explicite de sauvegarde de brouillon. #}
+                    <div class="d-flex justify-content-center mt-3">
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary"
+                            id="btn-save-draft"
+                        >
+                            Enregistrer le brouillon
+                        </button>
+                    </div>
+                {% endif %}
+
+                {# Zone de publication conditionnelle (minimum d'éléments atteint). #}
+                <div class="publish-zone d-none" id="publish-zone">
+                    <button type="submit" class="btn btn-danger btn-lg" id="btn-publish" data-submit-intent="publish">Publier</button>
+                    <span class="publish-hint" id="publish-hint">Le bouton apparaît à partir de 8 éléments.</span>
+                </div>
+
+                <section class="added-list-zone">
+                    {# Liste paginée des éléments ajoutés. #}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h2 class="h6 mb-0">Éléments</h2>
+                        <span class="small text-secondary" id="choices-counter">0 / 64</span>
+                    </div>
+
+                    <div class="choices-list" id="choices-list"></div>
+
+                    <div class="pagination-bar d-none" id="choices-pagination">
+                        <button type="button" class="btn btn-outline-light btn-sm" id="btn-page-prev">Précédent</button>
+                        <span id="choices-page-indicator" class="small text-secondary">Page 1 / 1</span>
+                        <button type="button" class="btn btn-outline-light btn-sm" id="btn-page-next">Suivant</button>
+                    </div>
+                </section>
+
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="button" class="btn btn-outline-light" id="btn-back-tournoi">&lt; Tournoi</button>
+                    <a href="{{ path('app_compte') }}" class="btn btn-outline-light" id="btn-back-home">Retour au profil</a>
+                </div>
+            </section>
+
+            {# Champs techniques cachés (payload + intention de soumission). #}
+            <div class="d-none">
+                {{ form_widget(tournoiForm.elementsPayload) }}
+                <input type="hidden" name="submit_intent" id="submit-intent" value="publish">
+            </div>
+        {{ form_end(tournoiForm) }}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Lancer une partie | {{ tournoi.nom }}{% endblock %}
+
+{% block body %}
+{% set forcerTous = taillesDisponibles is empty and afficherToutUtiliser %}
+
+{# Carte principale de configuration d'une nouvelle partie. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm partie-config-shell">
+    <div class="card-body p-4 p-lg-5">
+        {# En-tête de la page: informations tournoi + actions rapides. #}
+        <header class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
+            <div>
+                <h1 class="h3 mb-2">Lancer {{ tournoi.nom }}</h1>
+                <p class="mb-0 text-secondary">
+                    {{ totalElements }} éléments disponibles
+                    {% if tournoi.mode.value == 'theme_vs_theme' %}
+                        | {{ compteThemeA }} dans {{ tournoi.themeA ? tournoi.themeA.nom : 'Thème A' }}
+                        | {{ compteThemeB }} dans {{ tournoi.themeB ? tournoi.themeB.nom : 'Thème B' }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="d-flex gap-2 align-items-start">
+                <a class="btn btn-outline-light btn-sm" href="{{ path('app_home') }}">Retour à l'accueil</a>
+                <a class="btn btn-outline-primary btn-sm" href="{{ path('app_tournoi_stats', {id: tournoi.id}) }}">Stats</a>
+            </div>
+        </header>
+
+        {% if desquilibreTheme %}
+            <div class="alert alert-warning mb-4">
+                Les thèmes sont déséquilibrés. Le mode taille fixe gardera une base équilibrée.
+            </div>
+        {% endif %}
+
+        {# Bandeau de reprise/suppression si une partie active existe déjà. #}
+        {% if partieActive %}
+            <article class="partie-active-banner mb-4">
+                <div>
+                    <h2 class="h6 mb-1">Partie en cours détectée</h2>
+                    <p class="mb-0 text-secondary">Mise à jour le {{ partieActive.updatedAt|date('d/m/Y H:i') }}</p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <form method="post" action="{{ path('app_partie_config', {id: tournoi.id}) }}">
+                        <input type="hidden" name="action" value="resume">
+                        <button type="submit" class="btn btn-primary btn-sm">Reprendre</button>
+                    </form>
+                    <form method="post" action="{{ path('app_partie_config', {id: tournoi.id}) }}" class="js-confirm-restart-partie" data-confirm-message="Supprimer la partie en cours et repartir de zéro ?">
+                        <input type="hidden" name="action" value="restart">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Recommencer</button>
+                    </form>
+                </div>
+            </article>
+        {% endif %}
+
+        {# Formulaire principal de lancement de partie. #}
+        <form method="post" action="{{ path('app_partie_config', {id: tournoi.id}) }}" class="partie-config-form">
+            <input type="hidden" name="action" value="start">
+
+            {# Choix du volume d'éléments pour la partie. #}
+            <div class="partie-config-block mb-4">
+                <h2 class="h5 mb-3">Nombre d'éléments</h2>
+
+                {% if afficherToutUtiliser %}
+                    <input type="hidden" name="utiliser_tous" value="0">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="utiliser_tous" name="utiliser_tous" value="1" {{ forcerTous ? 'checked' : '' }}>
+                        <label class="form-check-label" for="utiliser_tous">Tout utiliser pour cette partie</label>
+                    </div>
+                {% else %}
+                    <input type="hidden" name="utiliser_tous" value="0">
+                {% endif %}
+
+                {% if forcerTous %}
+                    <input type="hidden" name="utiliser_tous" value="1">
+                {% endif %}
+
+                <div class="partie-size-grid {{ forcerTous ? 'is-hidden' : '' }}" id="partie-size-grid">
+                    {% for taille in taillesDisponibles %}
+                        <label class="partie-size-option">
+                            <input type="radio" name="taille" value="{{ taille }}" {{ loop.first ? 'checked' : '' }}>
+                            <span>{{ taille }}</span>
+                        </label>
+                    {% else %}
+                        <div class="partie-size-empty">Aucune taille fixe disponible, bascule automatique sur « Utiliser tous ».</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Options de règles de partie (repêchage et classement). #}
+            <div class="partie-config-block mb-4">
+                <h2 class="h5 mb-3">Options de partie</h2>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="partie-option-card">
+                            <input type="hidden" name="activer_repechage" value="0">
+                            <input type="checkbox" name="activer_repechage" value="1" {{ prefRepechage ? 'checked' : '' }}>
+                            <span>
+                                <strong>Repêchage</strong>
+                                <small>Phase supplémentaire avant la manche suivante.</small>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="partie-option-card">
+                            <input type="hidden" name="activer_classement" value="0">
+                            <input type="checkbox" name="activer_classement" value="1" {{ prefClassement ? 'checked' : '' }}>
+                            <span>
+                                <strong>Classement des perdants</strong>
+                                <small>Afficher un classement intermédiaire entre les manches.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {# Actions finales du formulaire. #}
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">Commencer la partie</button>
+                <a class="btn btn-outline-light" href="{{ path('app_home') }}">Annuler</a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

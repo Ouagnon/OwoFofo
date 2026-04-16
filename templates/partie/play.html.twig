@@ -1,0 +1,318 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Partie | {{ partie.tournoi.nom }}{% endblock %}
+
+{% block body %}
+{# Conteneur principal de l'écran de jeu (duel / inter-manche / décisions). #}
+<section class="duel-shell">
+    {# Barre supérieure minimale de navigation pendant la partie. #}
+    <header class="duel-topbar">
+        <a class="btn btn-outline-light btn-sm" href="{{ path('app_home') }}">Quitter</a>
+    </header>
+
+    {# Cas 1: une décision est requise pour gérer l'élément impair. #}
+    {% if decisionImpair and decisionImpair.action.value == 'en_attente' and duelActif is null and repechageActif is null and intermanche is null %}
+        <article class="duel-decision-card">
+            <h1 class="h4 mb-2">Élément impair détecté</h1>
+            <p class="text-secondary mb-3">
+                {{ decisionImpair.elementImpair.titre }} ne peut pas être apparié sur cette manche.
+            </p>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <form method="post" action="{{ path('app_partie_decision_impair', {id: partie.id}) }}">
+                    <input type="hidden" name="action" value="eliminer">
+                    <button class="btn btn-outline-danger" type="submit">Éliminer automatiquement</button>
+                </form>
+            </div>
+
+            {% if candidatsRemplacement is not empty %}
+                <form method="post" action="{{ path('app_partie_decision_impair', {id: partie.id}) }}" class="row g-2 align-items-end">
+                    <input type="hidden" name="action" value="remplacer">
+                    <div class="col-12 col-lg">
+                        <label class="form-label" for="element_remplacant">Remplacer un qualifié par l'élément impair</label>
+                        <select id="element_remplacant" name="element_remplacant" class="form-select" required>
+                            {% for candidat in candidatsRemplacement %}
+                                <option value="{{ candidat.id }}">{{ candidat.titre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-lg-auto">
+                        <button class="btn btn-primary w-100" type="submit">Remplacer</button>
+                    </div>
+                </form>
+            {% endif %}
+        </article>
+    {# Cas 2: duel standard en cours. #}
+    {% elseif duelActif %}
+        <h1 class="duel-title mb-1">{{ partie.tournoi.nom }}</h1>
+        <p class="text-secondary text-center mb-3">Tableau de {{ nomTypeManche }} | Match {{ duelActif.ordre }}</p>
+        {# Arène des deux concurrents + vote sur le titre. #}
+        <section class="duel-arena">
+            {% for element in [duelActif.elementA, duelActif.elementB] %}
+                <article class="duel-media-card" data-vote-card="1" data-card-index="{{ loop.index0 }}">
+                    <div class="duel-media-frame">
+                        {% if element.mediaType.value == 'image' %}
+                            <img src="{{ element.mediaUrl }}" alt="{{ element.titre }}" loading="eager" decoding="async" fetchpriority="high">
+                        {% else %}
+                            {% set sourceVideo = element.mediaUrl %}
+                            {% if 'youtube.com/watch' in sourceVideo %}
+                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('v=')|last|split('&')|first) %}
+                            {% elseif 'youtu.be/' in sourceVideo %}
+                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('youtu.be/')|last|split('?')|first) %}
+                            {% endif %}
+                            <iframe src="{{ sourceVideo }}" title="{{ element.titre }}" loading="lazy" allowfullscreen></iframe>
+                        {% endif %}
+                    </div>
+                    <div class="duel-media-content">
+                        <form method="post" action="{{ path('app_partie_vote_duel', {id: partie.id, duel: duelActif.id, elementId: element.id}) }}" class="duel-vote-form" data-vote-form="1">
+                            <button type="submit" class="duel-title-vote" data-vote-button="1" aria-label="Choisir {{ element.titre }}">
+                                <span class="duel-title-vote-title">{{ element.titre }}</span>
+                            </button>
+                        </form>
+                    </div>
+                </article>
+                {% if loop.first %}
+                    <div class="duel-versus" aria-hidden="true">VS</div>
+                {% endif %}
+            {% endfor %}
+        </section>
+    {# Cas 3: phase d'inter-manche (classement / repêchage / impair). #}
+    {% elseif intermanche %}
+        <article class="duel-decision-card intermanche-shell">
+            <h1 class="h4 mb-2">Inter-manche</h1>
+            <p class="text-secondary mb-3">
+                Classe les perdants et, si activé, gère les repêchages en glissant un perdant vers un vainqueur.
+            </p>
+
+            <form
+                method="post"
+                action="{{ path('app_partie_valider_intermanche', {id: partie.id}) }}"
+                id="intermanche-form"
+                data-mode-theme="{{ tournoiModeTheme ? '1' : '0' }}"
+                data-repechage-enabled="{{ autoriserRepechageIntermanche ? '1' : '0' }}"
+            >
+                <input type="hidden" name="classement_json" id="intermanche-classement-json" value="[]">
+                <input type="hidden" name="repechage_json" id="intermanche-repechage-json" value="[]">
+                <input type="hidden" name="impair_json" id="intermanche-impair-json" value="{}">
+
+                {# Grille inter-manche: perdants / impair / vainqueurs. #}
+                <div class="intermanche-grid{{ intermanche.oddElement ? ' has-odd' : '' }}">
+                    {# Colonne des perdants (tri + repêchage). #}
+                    <section class="intermanche-column">
+                        <h2 class="h6 mb-2">Perdants de la manche</h2>
+                        <p class="intermanche-subtitle mb-2">
+                            {% if autoriserClassementIntermanche %}
+                                Glisse pour ordonner le classement final des perdants.
+                            {% else %}
+                                Classement désactivé pour cette partie.
+                            {% endif %}
+                        </p>
+
+                        <ul
+                            id="intermanche-losers"
+                            class="intermanche-list"
+                            data-ranking-enabled="{{ autoriserClassementIntermanche ? '1' : '0' }}"
+                            data-rank-max="{{ intermanche.winners|length + intermanche.losers|length + (intermanche.oddElement ? 1 : 0) }}"
+                        >
+                            {% set dragEnabled = autoriserClassementIntermanche or autoriserRepechageIntermanche %}
+                            {% set rankMax = intermanche.winners|length + intermanche.losers|length + (intermanche.oddElement ? 1 : 0) %}
+                            {% set rankStart = rankMax - (intermanche.losers|length) + 1 %}
+                            {% for element in intermanche.losers %}
+                                <li
+                                    class="intermanche-slot intermanche-loss-slot"
+                                    data-loss-slot="1"
+                                >
+                                    <div class="intermanche-slot-label">
+                                        {% if autoriserClassementIntermanche %}
+                                            <span class="intermanche-rank-label">Position finale</span>
+                                            <span class="intermanche-rank-value">#{{ rankStart + loop.index0 }}</span>
+                                        {% else %}
+                                            <span class="intermanche-rank-label">Perdant</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div
+                                        class="intermanche-tile intermanche-loser"
+                                        draggable="{{ dragEnabled ? 'true' : 'false' }}"
+                                        data-element-id="{{ element.id }}"
+                                        data-theme-id="{{ element.theme ? element.theme.id : 0 }}"
+                                        data-can-promote="1"
+                                    >
+                                        <div class="intermanche-thumb">
+                                            {% if element.mediaType.value == 'image' %}
+                                                <img src="{{ element.mediaUrl }}" alt="{{ element.titre }}" loading="lazy" decoding="async">
+                                            {% else %}
+                                                {% set sourceVideo = element.mediaUrl %}
+                                                {% if 'youtube.com/watch' in sourceVideo %}
+                                                    {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('v=')|last|split('&')|first) %}
+                                                {% elseif 'youtu.be/' in sourceVideo %}
+                                                    {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('youtu.be/')|last|split('?')|first) %}
+                                                {% endif %}
+                                                <iframe src="{{ sourceVideo }}" title="{{ element.titre }}" loading="lazy" allowfullscreen></iframe>
+                                            {% endif %}
+                                        </div>
+                                        <div class="intermanche-meta">
+                                            <strong>{{ element.titre }}</strong>
+                                            {% if tournoiModeTheme and element.theme %}
+                                                <small>{{ element.theme.nom }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+
+                    {# Colonne centrale optionnelle pour l'élément impair. #}
+                    {% if intermanche.oddElement %}
+                        <section class="intermanche-column intermanche-odd-column">
+                            <h2 class="h6 mb-2">Élément impair</h2>
+                            <p class="intermanche-subtitle mb-2">
+                                Glisse cet élément vers les perdants ou sur un slot gagnant.
+                            </p>
+
+                            <div id="intermanche-odd-zone" class="intermanche-slot intermanche-odd-zone" data-odd-zone="1">
+                                <div class="intermanche-slot-label">En attente de placement</div>
+                                <div
+                                    class="intermanche-tile intermanche-odd"
+                                    draggable="true"
+                                    data-element-id="{{ intermanche.oddElement.id }}"
+                                    data-theme-id="{{ intermanche.oddElement.theme ? intermanche.oddElement.theme.id : 0 }}"
+                                    data-can-promote="0"
+                                    data-is-impair="1"
+                                >
+                                    <div class="intermanche-thumb">
+                                        {% if intermanche.oddElement.mediaType.value == 'image' %}
+                                            <img src="{{ intermanche.oddElement.mediaUrl }}" alt="{{ intermanche.oddElement.titre }}" loading="lazy" decoding="async">
+                                        {% else %}
+                                            {% set sourceVideo = intermanche.oddElement.mediaUrl %}
+                                            {% if 'youtube.com/watch' in sourceVideo %}
+                                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('v=')|last|split('&')|first) %}
+                                            {% elseif 'youtu.be/' in sourceVideo %}
+                                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('youtu.be/')|last|split('?')|first) %}
+                                            {% endif %}
+                                            <iframe src="{{ sourceVideo }}" title="{{ intermanche.oddElement.titre }}" loading="lazy" allowfullscreen></iframe>
+                                        {% endif %}
+                                    </div>
+                                    <div class="intermanche-meta">
+                                        <strong>{{ intermanche.oddElement.titre }}</strong>
+                                        {% if tournoiModeTheme and intermanche.oddElement.theme %}
+                                            <small>{{ intermanche.oddElement.theme.nom }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    {% endif %}
+
+                    {# Colonne des vainqueurs (cibles de remplacement). #}
+                    <section class="intermanche-column">
+                        <h2 class="h6 mb-2">Vainqueurs de la manche</h2>
+                        <p class="intermanche-subtitle mb-2">
+                            {% if autoriserRepechageIntermanche %}
+                                Dépose un perdant sur un vainqueur pour inverser les deux{% if tournoiModeTheme %} (même thème obligatoire){% endif %}.
+                            {% else %}
+                                Repêchage indisponible sur cette manche.
+                            {% endif %}
+                        </p>
+
+                        <ul id="intermanche-winners" class="intermanche-list intermanche-winners">
+                            {% for element in intermanche.winners %}
+                                <li class="intermanche-slot" data-slot-winner-id="{{ element.id }}" data-theme-id="{{ element.theme ? element.theme.id : 0 }}">
+                                    <div class="intermanche-slot-label">Slot qualifié</div>
+                                    <div
+                                        class="intermanche-tile intermanche-winner"
+                                        data-element-id="{{ element.id }}"
+                                        data-theme-id="{{ element.theme ? element.theme.id : 0 }}"
+                                        data-can-promote="0"
+                                    >
+                                        <div class="intermanche-thumb">
+                                            {% if element.mediaType.value == 'image' %}
+                                                <img src="{{ element.mediaUrl }}" alt="{{ element.titre }}" loading="lazy" decoding="async">
+                                            {% else %}
+                                                {% set sourceVideo = element.mediaUrl %}
+                                                {% if 'youtube.com/watch' in sourceVideo %}
+                                                    {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('v=')|last|split('&')|first) %}
+                                                {% elseif 'youtu.be/' in sourceVideo %}
+                                                    {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('youtu.be/')|last|split('?')|first) %}
+                                                {% endif %}
+                                                <iframe src="{{ sourceVideo }}" title="{{ element.titre }}" loading="lazy" allowfullscreen></iframe>
+                                            {% endif %}
+                                        </div>
+                                        <div class="intermanche-meta">
+                                            <strong>{{ element.titre }}</strong>
+                                            {% if tournoiModeTheme and element.theme %}
+                                                <small>{{ element.theme.nom }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                </div>
+
+                <div id="intermanche-feedback" class="intermanche-feedback mt-3" aria-live="polite"></div>
+
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="submit" class="btn btn-primary">Valider l'inter-manche</button>
+                </div>
+            </form>
+        </article>
+    {# Cas 4: repêchage en duel direct. #}
+    {% elseif repechageActif %}
+        <h1 class="duel-title">Repêchage {{ repechageActif.ordre }} / {{ nombreRepechages }}</h1>
+        <p class="text-secondary mb-3">Le perdant peut-il reprendre sa place ?</p>
+        <section class="duel-arena">
+            {% for element in [repechageActif.perdant, repechageActif.vainqueurCible] %}
+                <article class="duel-media-card" data-vote-card="1" data-card-index="{{ loop.index0 }}">
+                    <div class="duel-media-frame">
+                        {% if element.mediaType.value == 'image' %}
+                            <img src="{{ element.mediaUrl }}" alt="{{ element.titre }}" loading="eager" decoding="async" fetchpriority="high">
+                        {% else %}
+                            {% set sourceVideo = element.mediaUrl %}
+                            {% if 'youtube.com/watch' in sourceVideo %}
+                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('v=')|last|split('&')|first) %}
+                            {% elseif 'youtu.be/' in sourceVideo %}
+                                {% set sourceVideo = 'https://www.youtube.com/embed/' ~ (sourceVideo|split('youtu.be/')|last|split('?')|first) %}
+                            {% endif %}
+                            <iframe src="{{ sourceVideo }}" title="{{ element.titre }}" loading="lazy" allowfullscreen></iframe>
+                        {% endif %}
+                    </div>
+                    <div class="duel-media-content">
+                        <form method="post" action="{{ path('app_partie_vote_repechage', {id: partie.id, repechage: repechageActif.id, elementId: element.id}) }}" class="duel-vote-form" data-vote-form="1">
+                            <button type="submit" class="duel-title-vote" data-vote-button="1" aria-label="Choisir {{ element.titre }}">
+                                <span class="duel-title-vote-title">{{ element.titre }}</span>
+                            </button>
+                        </form>
+                    </div>
+                </article>
+                {% if loop.first %}
+                    <div class="duel-versus" aria-hidden="true">VS</div>
+                {% endif %}
+            {% endfor %}
+        </section>
+    {# Cas 5: affichage d'un classement intermédiaire finalisé. #}
+    {% elseif classementManche is not empty %}
+        <article class="duel-decision-card">
+            <h1 class="h4 mb-2">Classement intermédiaire</h1>
+            <p class="text-secondary mb-3">La manche est terminée, voici l'ordre des perdants de cette phase.</p>
+
+            <ol class="mb-3 ps-3 text-start">
+                {% for ligneClassement in classementManche %}
+                    <li class="mb-1">{{ ligneClassement.element.titre }}</li>
+                {% endfor %}
+            </ol>
+
+            <a class="btn btn-primary" href="{{ path('app_partie_play', {id: partie.id}) }}">Passer à la manche suivante</a>
+        </article>
+    {# Cas 6: fallback de sécurité pendant les transitions serveur. #}
+    {% else %}
+        <article class="duel-decision-card">
+            <h1 class="h5 mb-2">Mise à jour en cours</h1>
+            <p class="mb-3 text-secondary">Cette manche est en train d'être finalisée.</p>
+            <a class="btn btn-primary" href="{{ path('app_partie_play', {id: partie.id}) }}">Actualiser</a>
+        </article>
+    {% endif %}
+</section>
+{% endblock %}

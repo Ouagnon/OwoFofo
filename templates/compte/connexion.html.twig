@@ -1,0 +1,38 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Se connecter | OwoFofo{% endblock %}
+
+{% block body %}
+{# Écran de connexion utilisateur. #}
+<section class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-5">
+        <article class="card bg-body-tertiary border-secondary-subtle shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h4 mb-3">Se connecter</h1>
+
+                {# Affichage de l'erreur d'authentification Symfony Security. #}
+                {% if erreurConnexion %}
+                    <div class="alert alert-danger">{{ erreurConnexion.messageKey|trans(erreurConnexion.messageData, 'security') }}</div>
+                {% endif %}
+
+                {# Formulaire de connexion (pseudo + mot de passe + CSRF). #}
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="identifiant" class="form-label">Pseudo</label>
+                        <input type="text" value="{{ dernierIdentifiant }}" name="_username" id="identifiant" class="form-control" autocomplete="username" required autofocus>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="mot-de-passe" class="form-label">Mot de passe</label>
+                        <input type="password" name="_password" id="mot-de-passe" class="form-control" autocomplete="current-password" required>
+                    </div>
+
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+                    <button class="btn btn-primary w-100" type="submit">Se connecter</button>
+                </form>
+            </div>
+        </article>
+    </div>
+</section>
+{% endblock %}

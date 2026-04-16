@@ -1,0 +1,333 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Stats | {{ tournoi.nom }}{% endblock %}
+
+{% block body %}
+
+{# Bloc principal des statistiques du tournoi. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm stats-shell">
+    <div class="card-body p-4 p-lg-5">
+        {# En-tête: titre + actions. #}
+        <header class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
+            {% set totalElementsTournoi = tournoi.nombreElementsActifs %}
+            {% set afficherToutUtiliserChoix = (totalElementsTournoi not in [8, 16, 32, 64]) or (tournoi.mode.value == 'theme_vs_theme' and compteThemeA != compteThemeB) %}
+            <div>
+                <h1 class="h3 mb-2">{{ tournoi.nom }}</h1>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                {% if app.user %}
+                    <button
+                        type="button"
+                        class="btn btn-primary btn-sm js-open-play-modal-stats"
+                        data-tournoi-id="{{ tournoi.id }}"
+                        data-mode="{{ tournoi.mode.value }}"
+                        data-total="{{ totalElementsTournoi }}"
+                        data-count-theme-a="{{ compteThemeA }}"
+                        data-count-theme-b="{{ compteThemeB }}"
+                        data-show-use-all="{{ afficherToutUtiliserChoix ? '1' : '0' }}"
+                        data-active-partie-id="{{ partieActive ? partieActive.id : 0 }}"
+                        data-active-partie-url="{{ partieActive ? path('app_partie_play', {id: partieActive.id}) : '' }}"
+                        data-active-partie-delete-url="{{ partieActive ? path('app_partie_delete', {id: partieActive.id}) : '' }}"
+                    >Jouer ce tournoi</button>
+                {% else %}
+                    <a class="btn btn-primary btn-sm" href="{{ path('app_compte_connexion') }}">Se connecter pour jouer</a>
+                {% endif %}
+                <a class="btn btn-outline-light btn-sm" href="{{ path('app_home') }}">Retour à l'accueil</a>
+            </div>
+        </header>
+
+        {% if totalParties == 0 %}
+            <div class="stats-empty">
+                Aucune partie terminée pour le moment.
+            </div>
+        {% else %}
+            {# Tableau de classement global des éléments du tournoi. #}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle stats-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Élément</th>
+                            <th>% de duels gagnés</th>
+                            <th>% de tournois gagnés</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ligne in classement %}
+                            {% set element = ligne.element %}
+                            {% set mediaUrl = element.mediaUrl %}
+                            {% set ratioDuel = ligne.ratioDuel|default(0) %}
+                            {% set ratioFinal = ligne.ratioFinal|default(0) %}
+                            {% set ratioDuelBarre = ratioDuel < 0 ? 0 : (ratioDuel > 100 ? 100 : ratioDuel) %}
+                            {% set ratioFinalBarre = ratioFinal < 0 ? 0 : (ratioFinal > 100 ? 100 : ratioFinal) %}
+                            <tr>
+                                <td>{{ offsetClassement + loop.index }}</td>
+                                <td>
+                                    <div class="stats-element-cell">
+                                        <div class="stats-element-thumb">
+                                            {% if element.mediaType.value == 'image' %}
+                                                <img src="{{ element.mediaUrl }}" alt="{{ element.titre }}" loading="lazy" decoding="async">
+                                            {% else %}
+                                                {% set videoId = '' %}
+                                                {% if '/embed/' in mediaUrl %}
+                                                    {% set videoId = mediaUrl|split('/embed/')|last|split('?')|first %}
+                                                {% elseif 'youtube.com/watch' in mediaUrl %}
+                                                    {% set videoId = mediaUrl|split('v=')|last|split('&')|first %}
+                                                {% elseif 'youtu.be/' in mediaUrl %}
+                                                    {% set videoId = mediaUrl|split('youtu.be/')|last|split('?')|first %}
+                                                {% endif %}
+                                                {% set miniatureVideo = videoId ? 'https://img.youtube.com/vi/' ~ videoId ~ '/hqdefault.jpg' : '' %}
+                                                <button
+                                                    type="button"
+                                                    class="stats-video-preview js-stats-load-video"
+                                                    data-video-url="{{ mediaUrl|e('html_attr') }}"
+                                                    data-video-title="{{ element.titre|e('html_attr') }}"
+                                                    aria-label="Lire la vidéo {{ element.titre }}"
+                                                >
+                                                    {% if miniatureVideo %}
+                                                        <img src="{{ miniatureVideo }}" alt="Aperçu vidéo de {{ element.titre }}" loading="lazy" decoding="async">
+                                                    {% else %}
+                                                        <span class="stats-video-fallback">Vidéo</span>
+                                                    {% endif %}
+                                                    <span class="stats-video-preview-play">Lire</span>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <strong>{{ element.titre }}</strong>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="stats-ratio-cell">
+                                    <div class="stats-ratio-meter" role="img" aria-label="Victoire en duel pour {{ element.titre }} : {{ ratioDuel|number_format(1, ',', ' ') }} %">
+                                        <div class="stats-ratio-track">
+                                            <progress
+                                                class="stats-ratio-progress stats-ratio-progress-duel"
+                                                aria-label="Victoire en duel pour {{ element.titre }}"
+                                                value="{{ ratioDuelBarre|number_format(1, '.', '') }}"
+                                                max="100"
+                                            >
+                                                {{ ratioDuel|number_format(1, ',', ' ') }} %
+                                            </progress>
+                                            <span class="stats-ratio-label">{{ ratioDuel|number_format(1, ',', ' ') }} %</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="stats-ratio-cell">
+                                    <div class="stats-ratio-meter" role="img" aria-label="Victoire en tournoi pour {{ element.titre }} : {{ ratioFinal|number_format(1, ',', ' ') }} %">
+                                        <div class="stats-ratio-track">
+                                            <progress
+                                                class="stats-ratio-progress stats-ratio-progress-tournoi"
+                                                aria-label="Victoire en tournoi pour {{ element.titre }}"
+                                                value="{{ ratioFinalBarre|number_format(1, '.', '') }}"
+                                                max="100"
+                                            >
+                                                {{ ratioFinal|number_format(1, ',', ' ') }} %
+                                            </progress>
+                                            <span class="stats-ratio-label">{{ ratioFinal|number_format(1, ',', ' ') }} %</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Pagination du classement (10 éléments par page). #}
+            {% if totalPages > 1 %}
+                <nav class="mt-3 stats-pagination-wrap" aria-label="Pagination du classement">
+                    <ul class="pagination pagination-sm justify-content-center mb-0 stats-pagination">
+                        <li class="page-item {{ pageCourante <= 1 ? 'disabled' : '' }}">
+                            <a class="page-link" href="{{ path('app_tournoi_stats', {id: tournoi.id, page: pageCourante - 1}) }}">Précédent</a>
+                        </li>
+                        {% for numeroPage in 1..totalPages %}
+                            <li class="page-item {{ numeroPage == pageCourante ? 'active' : '' }}">
+                                <a class="page-link" href="{{ path('app_tournoi_stats', {id: tournoi.id, page: numeroPage}) }}">{{ numeroPage }}</a>
+                            </li>
+                        {% endfor %}
+                        <li class="page-item {{ pageCourante >= totalPages ? 'disabled' : '' }}">
+                            <a class="page-link" href="{{ path('app_tournoi_stats', {id: tournoi.id, page: pageCourante + 1}) }}">Suivant</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+        {% endif %}
+    </div>
+</section>
+
+{# Modales utilisateur: lancement de partie + partie active détectée. #}
+{% if app.user %}
+    <div class="modal fade home-play-modal" id="playTournamentModalStats" tabindex="-1" aria-labelledby="playTournamentModalStatsTitle" aria-hidden="true" data-config-template="{{ path('app_partie_config', {id: '__ID__'}) }}" data-bs-backdrop="true" data-bs-keyboard="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content text-light">
+                <div class="modal-header">
+                    <h2 class="modal-title h5 mb-0" id="playTournamentModalStatsTitle">Lancer une partie</h2>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <form method="post" id="playTournamentFormStats" action="{{ path('app_partie_config', {id: tournoi.id}) }}">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="start">
+                        <input type="hidden" name="utiliser_tous" value="0" id="home-play-utiliser-tous-hidden-stats">
+                        <input type="hidden" name="taille" value="0" id="home-play-taille-hidden-stats">
+
+                        <div class="mb-3">
+                            <label class="form-label" for="home-play-choice-stats">Nombre d'éléments / tout utiliser</label>
+                            <select class="form-select home-play-choice" id="home-play-choice-stats" aria-label="Choix de configuration">
+                                <option value="" selected>---</option>
+                            </select>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <input type="hidden" name="activer_repechage" value="0">
+                                <label class="home-play-option-card">
+                                    <input type="checkbox" name="activer_repechage" value="1" {{ app.user.activerRepechage ? 'checked' : '' }}>
+                                    <span>
+                                        <strong>Repêchage</strong>
+                                        <small>Phase supplémentaire avant la manche suivante.</small>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <input type="hidden" name="activer_classement" value="0">
+                                <label class="home-play-option-card">
+                                    <input type="checkbox" name="activer_classement" value="1" {{ app.user.activerClassementPerdants ? 'checked' : '' }}>
+                                    <span>
+                                        <strong>Classement</strong>
+                                        <small>Classement intermédiaire entre les manches.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-primary" id="playTournamentSubmitBtnStats">Démarrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade home-play-modal" id="activePartieModalStats" tabindex="-1" aria-labelledby="activePartieModalStatsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content text-light">
+                <div class="modal-header">
+                    <h2 class="modal-title h5 mb-0" id="activePartieModalStatsTitle">Partie en cours détectée</h2>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0" id="activePartieModalStatsMessage">
+                        Une partie est déjà en cours sur ce tournoi. Tu veux la reprendre ?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
+                    <a class="btn btn-success" id="activePartieResumeBtnStats" href="#">Oui, reprendre</a>
+                    <button type="button" class="btn btn-danger" id="activePartieDeleteBtnStats">Non, recommencer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{# Modale résultat affichée après une partie terminée. #}
+{% if partiePopup and partiePopup.vainqueurFinal %}
+    <div class="modal fade" id="statsResultModal" tabindex="-1" aria-labelledby="statsResultModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-redirect-url="{{ path('app_tournoi_stats', {id: tournoi.id}) }}">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable stats-result-modal-dialog">
+            <article class="modal-content stats-popup-card text-light">
+                <div class="modal-header border-0 pb-0">
+                    <p class="stats-popup-label mb-0">Partie terminée</p>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <h2 class="h4 mb-2" id="statsResultModalTitle">{{ partiePopup.vainqueurFinal.titre }} remporte ce tournoi</h2>
+                    <p class="text-secondary mb-3">Ton résultat a été ajouté aux stats globales.</p>
+
+                    {% set mediaUrlGagnant = partiePopup.vainqueurFinal.mediaUrl %}
+                    <div class="stats-popup-winner-showcase mb-3">
+                        <div class="stats-popup-preview">
+                            {% if partiePopup.vainqueurFinal.mediaType.value == 'image' %}
+                                <img src="{{ partiePopup.vainqueurFinal.mediaUrl }}" alt="{{ partiePopup.vainqueurFinal.titre }}" decoding="async">
+                            {% else %}
+                                {% set videoIdGagnant = '' %}
+                                {% if '/embed/' in mediaUrlGagnant %}
+                                    {% set videoIdGagnant = mediaUrlGagnant|split('/embed/')|last|split('?')|first %}
+                                {% elseif 'youtube.com/watch' in mediaUrlGagnant %}
+                                    {% set videoIdGagnant = mediaUrlGagnant|split('v=')|last|split('&')|first %}
+                                {% elseif 'youtu.be/' in mediaUrlGagnant %}
+                                    {% set videoIdGagnant = mediaUrlGagnant|split('youtu.be/')|last|split('?')|first %}
+                                {% endif %}
+                                {% set miniatureVideoGagnant = videoIdGagnant ? 'https://img.youtube.com/vi/' ~ videoIdGagnant ~ '/hqdefault.jpg' : '' %}
+                                <button
+                                    type="button"
+                                    class="stats-video-preview js-stats-load-video"
+                                    data-video-url="{{ mediaUrlGagnant|e('html_attr') }}"
+                                    data-video-title="{{ partiePopup.vainqueurFinal.titre|e('html_attr') }}"
+                                    aria-label="Lire la vidéo {{ partiePopup.vainqueurFinal.titre }}"
+                                >
+                                    {% if miniatureVideoGagnant %}
+                                        <img src="{{ miniatureVideoGagnant }}" alt="Aperçu vidéo de {{ partiePopup.vainqueurFinal.titre }}" decoding="async">
+                                    {% else %}
+                                        <span class="stats-video-fallback">Vidéo</span>
+                                    {% endif %}
+                                    <span class="stats-video-preview-play">Lire</span>
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if afficherClassementPartiePopup and classementPartiePopup is not empty %}
+                        <div class="stats-popup-ranking text-start mb-1">
+                            <h3 class="h6 mb-2">Classement final</h3>
+                            <ol class="mb-0 ps-3 stats-popup-ranking-list">
+                                {% for elementClasse in classementPartiePopup %}
+                                    {% set mediaUrlClassement = elementClasse.mediaUrl %}
+                                    <li class="stats-popup-ranking-item mb-2">
+                                        <div class="stats-popup-ranking-item-content">
+                                            <div class="stats-popup-ranking-thumb">
+                                                {% if elementClasse.mediaType.value == 'image' %}
+                                                    <img src="{{ elementClasse.mediaUrl }}" alt="{{ elementClasse.titre }}" loading="lazy" decoding="async">
+                                                {% else %}
+                                                    {% set videoIdClassement = '' %}
+                                                    {% if '/embed/' in mediaUrlClassement %}
+                                                        {% set videoIdClassement = mediaUrlClassement|split('/embed/')|last|split('?')|first %}
+                                                    {% elseif 'youtube.com/watch' in mediaUrlClassement %}
+                                                        {% set videoIdClassement = mediaUrlClassement|split('v=')|last|split('&')|first %}
+                                                    {% elseif 'youtu.be/' in mediaUrlClassement %}
+                                                        {% set videoIdClassement = mediaUrlClassement|split('youtu.be/')|last|split('?')|first %}
+                                                    {% endif %}
+                                                    {% set miniatureVideoClassement = videoIdClassement ? 'https://img.youtube.com/vi/' ~ videoIdClassement ~ '/hqdefault.jpg' : '' %}
+                                                    <button
+                                                        type="button"
+                                                        class="stats-video-preview js-stats-load-video"
+                                                        data-video-url="{{ mediaUrlClassement|e('html_attr') }}"
+                                                        data-video-title="{{ elementClasse.titre|e('html_attr') }}"
+                                                        aria-label="Lire la vidéo {{ elementClasse.titre }}"
+                                                    >
+                                                        {% if miniatureVideoClassement %}
+                                                            <img src="{{ miniatureVideoClassement }}" alt="Aperçu vidéo de {{ elementClasse.titre }}" loading="lazy" decoding="async">
+                                                        {% else %}
+                                                            <span class="stats-video-fallback">Vidéo</span>
+                                                        {% endif %}
+                                                        <span class="stats-video-preview-play">Lire</span>
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                            <span class="stats-popup-ranking-title">{{ elementClasse.titre }}</span>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ol>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <a class="btn btn-primary" href="{{ path('app_tournoi_stats', {id: tournoi.id}) }}">Fermer</a>
+                </div>
+            </article>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

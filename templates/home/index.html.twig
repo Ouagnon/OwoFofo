@@ -1,0 +1,194 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Accueil | OwoFofo{% endblock %}
+
+{% block body %}
+
+{# Bloc de recherche des tournois publics. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm mb-4">
+    <div class="card-body p-3 p-md-4">
+        <form method="get" action="{{ path('app_home') }}" class="row g-2 align-items-center">
+            <div class="col-12 col-md">
+                <input type="search" name="q" value="{{ recherche }}" placeholder="Rechercher un tournoi..." class="form-control" aria-label="Recherche tournoi">
+            </div>
+            <div class="col-12 col-md-auto">
+                <button type="submit" class="btn btn-primary w-100">Rechercher</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+{# Grille des tournois affichés sur la page d'accueil. #}
+<section class="row g-3">
+    {% for tournoi in tournois %}
+        {% set libelleMode = tournoi.mode.value == 'theme_vs_theme' ? 'VS' : 'Classique' %}
+        {% set compteThemeA = 0 %}
+        {% set compteThemeB = 0 %}
+        {% set totalElementsTournoi = tournoi.nombreElementsActifs %}
+        {% if tournoi.mode.value == 'theme_vs_theme' %}
+            {% for element in tournoi.elementsActifs %}
+                {% if tournoi.themeA and element.theme and element.theme.id == tournoi.themeA.id %}
+                    {% set compteThemeA = compteThemeA + 1 %}
+                {% elseif tournoi.themeB and element.theme and element.theme.id == tournoi.themeB.id %}
+                    {% set compteThemeB = compteThemeB + 1 %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% set afficherToutUtiliserChoix = (totalElementsTournoi not in [8, 16, 32, 64]) or (tournoi.mode.value == 'theme_vs_theme' and compteThemeA != compteThemeB) %}
+        {% set partieActive = app.user ? (partiesActivesParTournoi[tournoi.id]|default(null)) : null %}
+        <div class="col-12 col-sm-6 col-lg-3">
+            <article class="home-grid-card h-100">
+                {# Couverture + badges du tournoi. #}
+                <div class="home-grid-cover">
+                    {% if tournoi.coverImageUrl %}
+                        <img src="{{ tournoi.coverImageUrl }}" alt="Couverture de {{ tournoi.nom }}" loading="lazy" decoding="async">
+                    {% else %}
+                        <div class="tournament-cover-placeholder">
+                            <span>Pas de couverture</span>
+                        </div>
+                    {% endif %}
+                    <span class="home-grid-mode">{{ libelleMode }}</span>
+                    <span class="home-grid-elements">{{ totalElementsTournoi }}</span>
+                </div>
+
+                <div class="card-body p-3">
+                    <h2 class="home-grid-title">{{ tournoi.nom }}</h2>
+                    {% if tournoi.description %}
+                        <p class="home-grid-desc">
+                            {{ tournoi.description|length > 65 ? tournoi.description|slice(0, 65) ~ '...' : tournoi.description }}
+                        </p>
+                    {% else %}
+                        <p class="home-grid-desc text-secondary">Tournoi public prêt à jouer.</p>
+                    {% endif %}
+
+                    {# Actions: jouer / consulter les stats. #}
+                    <div class="home-grid-actions d-flex gap-2 mt-3">
+                        {% if app.user %}
+                            <button
+                                type="button"
+                                class="btn btn-outline-primary btn-sm flex-fill js-open-play-modal"
+                                data-tournoi-id="{{ tournoi.id }}"
+                                data-tournoi-nom="{{ tournoi.nom|e('html_attr') }}"
+                                data-mode="{{ tournoi.mode.value }}"
+                                data-total="{{ totalElementsTournoi }}"
+                                data-count-theme-a="{{ compteThemeA }}"
+                                data-count-theme-b="{{ compteThemeB }}"
+                                data-show-use-all="{{ afficherToutUtiliserChoix ? '1' : '0' }}"
+                                data-theme-a-name="{{ tournoi.themeA ? tournoi.themeA.nom|e('html_attr') : 'Thème A' }}"
+                                data-theme-b-name="{{ tournoi.themeB ? tournoi.themeB.nom|e('html_attr') : 'Thème B' }}"
+                                data-active-partie-id="{{ partieActive ? partieActive.id : 0 }}"
+                                data-active-partie-url="{{ partieActive ? path('app_partie_play', {id: partieActive.id}) : '' }}"
+                                data-active-partie-delete-url="{{ partieActive ? path('app_partie_delete', {id: partieActive.id}) : '' }}"
+                            >Jouer</button>
+                        {% else %}
+                            <a class="btn btn-outline-primary btn-sm flex-fill" href="{{ path('app_compte_connexion') }}">Jouer</a>
+                        {% endif %}
+                        <a class="btn btn-outline-light btn-sm flex-fill" href="{{ path('app_tournoi_stats', {id: tournoi.id}) }}">Stats</a>
+                    </div>
+                </div>
+            </article>
+        </div>
+    {% else %}
+        <div class="col-12">
+            <div class="card bg-body-tertiary border-secondary-subtle shadow-sm">
+                <div class="card-body text-secondary">Aucun tournoi trouvé pour cette recherche.</div>
+            </div>
+        </div>
+    {% endfor %}
+</section>
+
+{# Pagination des tournois. #}
+{% if totalPages > 1 %}
+    <nav class="mt-4 d-flex justify-content-center" aria-label="Pagination des tournois">
+        <ul class="pagination mb-0">
+            <li class="page-item {{ pageCourante <= 1 ? 'disabled' : '' }}">
+                <a class="page-link" href="{{ path('app_home', { q: recherche, page: pageCourante - 1 }) }}">Précédent</a>
+            </li>
+
+            {% for p in 1..totalPages %}
+                <li class="page-item {{ p == pageCourante ? 'active' : '' }}">
+                    <a class="page-link" href="{{ path('app_home', { q: recherche, page: p }) }}">{{ p }}</a>
+                </li>
+            {% endfor %}
+
+            <li class="page-item {{ pageCourante >= totalPages ? 'disabled' : '' }}">
+                <a class="page-link" href="{{ path('app_home', { q: recherche, page: pageCourante + 1 }) }}">Suivant</a>
+            </li>
+        </ul>
+    </nav>
+{% endif %}
+
+{% if app.user %}
+    <div class="modal fade home-play-modal" id="playTournamentModal" tabindex="-1" aria-labelledby="playTournamentModalTitle" aria-hidden="true" data-config-template="{{ path('app_partie_config', {id: '__ID__'}) }}" data-bs-backdrop="true" data-bs-keyboard="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content text-light">
+                <div class="modal-header">
+                    <h2 class="modal-title h5 mb-0" id="playTournamentModalTitle">Lancer une partie</h2>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <form method="post" id="playTournamentForm">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="start">
+                        <input type="hidden" name="utiliser_tous" value="0" id="home-play-utiliser-tous-hidden">
+                        <input type="hidden" name="taille" value="0" id="home-play-taille-hidden">
+
+                        <div class="mb-3">
+                            <label class="form-label" for="home-play-choice">Nombre d'éléments / tout utiliser</label>
+                            <select class="form-select home-play-choice" id="home-play-choice" aria-label="Choix de configuration">
+                                <option value="" selected>---</option>
+                            </select>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <input type="hidden" name="activer_repechage" value="0">
+                                <label class="home-play-option-card">
+                                    <input type="checkbox" name="activer_repechage" value="1" {{ app.user.activerRepechage ? 'checked' : '' }}>
+                                    <span>
+                                        <strong>Repêchage</strong>
+                                        <small>Phase supplémentaire avant la manche suivante.</small>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <input type="hidden" name="activer_classement" value="0">
+                                <label class="home-play-option-card">
+                                    <input type="checkbox" name="activer_classement" value="1" {{ app.user.activerClassementPerdants ? 'checked' : '' }}>
+                                    <span>
+                                        <strong>Classement</strong>
+                                        <small>Classement intermédiaire entre les manches.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-primary" id="playTournamentSubmitBtn">Démarrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade home-play-modal" id="activePartieModal" tabindex="-1" aria-labelledby="activePartieModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content text-light">
+                <div class="modal-header">
+                    <h2 class="modal-title h5 mb-0" id="activePartieModalTitle">Partie en cours détectée</h2>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0" id="activePartieModalMessage">
+                        Une partie est déjà en cours sur ce tournoi. Tu veux la reprendre ?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <a class="btn btn-success" id="activePartieResumeBtn" href="#">Oui, reprendre</a>
+                    <button type="button" class="btn btn-danger" id="activePartieDeleteBtn">Non, recommencer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+    <head>
+        {# Métadonnées HTML globales. #}
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}OwoFofo{% endblock %}</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⚫️</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>sf</text></svg>">
+        {# Feuilles de style globales. #}
+        {% block stylesheets %}
+            <link rel="stylesheet" href="{{ asset('vendor/bootstrap/bootstrap.min.css') }}">
+            <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
+        {% endblock %}
+
+        {# JavaScript global (importmap + Bootstrap bundle). #}
+        {% block javascripts %}
+            {% block importmap %}{{ importmap('app') }}{% endblock %}
+            <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+        {% endblock %}
+    </head>
+    {% set masquerNavbar = masquerNavbar|default(false) %}
+    <body class="site-body{{ masquerNavbar ? ' site-body-no-nav' : '' }}">
+        {# Navigation principale, masquable sur les écrans immersifs (duel). #}
+        {% if not masquerNavbar %}
+        <header class="border-bottom border-info-subtle">
+            <nav class="navbar navbar-expand-lg py-3">
+                <div class="container">
+                    <a class="navbar-brand fw-semibold text-light" href="{{ path('app_home') }}">OwoFofo</a>
+                    <button class="navbar-toggler border-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-controls="menuPrincipal" aria-expanded="false" aria-label="Afficher le menu">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="collapse navbar-collapse" id="menuPrincipal">
+                        <div class="ms-auto d-flex flex-column flex-lg-row gap-2 mt-3 mt-lg-0">
+                    {% if app.user %}
+                            <a class="btn btn-outline-primary btn-sm" href="{{ path('app_tournoi_create') }}">Créer un tournoi</a>
+                            <a class="btn btn-outline-light btn-sm" href="{{ path('app_compte') }}">Profil</a>
+                            <a class="btn btn-outline-danger btn-sm" href="{{ path('app_compte_deconnexion') }}">Déconnexion</a>
+                    {% else %}
+                            <a class="btn btn-outline-light btn-sm" href="{{ path('app_compte_connexion') }}">Se connecter</a>
+                            <a class="btn btn-primary btn-sm" href="{{ path('app_compte_inscription') }}">Créer un compte</a>
+                    {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        {% endif %}
+
+        {# Contenu principal des pages. #}
+        <main class="{{ masquerNavbar ? 'container-fluid p-0' : 'container py-4 py-lg-5' }}">
+            {# Zone centralisée des messages flash. #}
+            {% for type, messages in app.flashes %}
+                {% for message in messages %}
+                    {% set classeAlerte = 'info' %}
+                    {% if type in ['success'] %}
+                        {% set classeAlerte = 'success' %}
+                    {% elseif type in ['error', 'danger'] %}
+                        {% set classeAlerte = 'danger' %}
+                    {% elseif type in ['warning'] %}
+                        {% set classeAlerte = 'warning' %}
+                    {% endif %}
+                    <div class="alert alert-{{ classeAlerte }} mb-3" role="alert">{{ message }}</div>
+                {% endfor %}
+            {% endfor %}
+
+            {# Bloc de contenu spécifique à chaque page. #}
+            {% block body %}{% endblock %}
+        </main>
+    </body>
+</html>

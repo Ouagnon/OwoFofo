@@ -1,0 +1,168 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mon compte | OwoFofo{% endblock %}
+
+{% block body %}
+{# Carte identité utilisateur. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm mb-4">
+    <div class="card-body p-4">
+        <h1 class="h3 mb-2">Mon compte</h1>
+        <p class="mb-1">Pseudo actuel : <strong>{{ joueur.nom }}</strong></p>
+        <p class="mb-0 text-secondary">Inscrit le {{ joueur.createdAt|date('d/m/Y H:i') }}</p>
+    </div>
+</section>
+
+{# Bloc de gestion du pseudo et du mot de passe. #}
+<section class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <article class="card bg-body-tertiary border-secondary-subtle shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Modifier le pseudo</h2>
+                {{ form_start(formulairePseudo) }}
+                    {{ form_row(formulairePseudo.nouveauNom) }}
+                    {{ form_row(formulairePseudo.motDePasseActuel) }}
+                    <button type="submit" class="btn btn-outline-primary">Enregistrer le pseudo</button>
+                {{ form_end(formulairePseudo) }}
+            </div>
+        </article>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <article class="card bg-body-tertiary border-secondary-subtle shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Modifier le mot de passe</h2>
+                {{ form_start(formulaireMotDePasse) }}
+                    {{ form_row(formulaireMotDePasse.motDePasseActuel) }}
+                    {{ form_row(formulaireMotDePasse.nouveauMotDePasse.first) }}
+                    {{ form_row(formulaireMotDePasse.nouveauMotDePasse.second) }}
+                    <button type="submit" class="btn btn-outline-primary">Changer le mot de passe</button>
+                {{ form_end(formulaireMotDePasse) }}
+            </div>
+        </article>
+    </div>
+</section>
+
+{# Liste des parties en cours de l'utilisateur. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Mes parties en cours</h2>
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3">
+            {% for partie in partiesActives %}
+                <div class="col">
+                    <article class="profile-tournament-card">
+                        <div class="tournament-cover-wrap tournament-cover-wrap-sm">
+                        {% if partie.tournoi and partie.tournoi.coverImageUrl %}
+                            <img src="{{ partie.tournoi.coverImageUrl }}" alt="Couverture de {{ partie.tournoi.nom }}" class="tournament-cover-img" loading="lazy" decoding="async">
+                        {% else %}
+                            <div class="tournament-cover-placeholder">
+                                <span>Partie en cours</span>
+                            </div>
+                        {% endif %}
+                        </div>
+                        <div class="profile-tournament-card-body">
+                            <div class="profile-tournament-meta">
+                                <span class="profile-tournament-badge {{ partie.tournoi and partie.tournoi.mode.value == 'theme_vs_theme' ? 'is-vs' : '' }}">{{ partie.tournoi and partie.tournoi.mode.value == 'theme_vs_theme' ? 'VS' : 'Classique' }}</span>
+                                <span class="profile-tournament-count">{{ partie.updatedAt|date('d/m H:i') }}</span>
+                            </div>
+                            <h3 class="profile-tournament-title">{{ partie.tournoi ? partie.tournoi.nom : 'Tournoi indisponible' }}</h3>
+                            <div class="profile-tournament-actions d-grid gap-2">
+                                <a class="btn btn-primary btn-sm" href="{{ path('app_partie_play', {id: partie.id}) }}">Reprendre</a>
+                                <form method="post" action="{{ path('app_partie_delete', {id: partie.id}) }}" class="js-confirm-delete-partie" data-confirm-message="Supprimer cette partie en cours ?">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">Supprimer</button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <p class="mb-0 text-secondary">Tu n'as pas de partie active.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+{# Liste des brouillons de tournoi. #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Mes brouillons</h2>
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3">
+            {% for tournoi in tournoisBrouillon %}
+                <div class="col">
+                    <article class="profile-tournament-card">
+                        <div class="tournament-cover-wrap tournament-cover-wrap-sm">
+                        {% if tournoi.coverImageUrl %}
+                            <img src="{{ tournoi.coverImageUrl }}" alt="Couverture de {{ tournoi.nom }}" class="tournament-cover-img" loading="lazy" decoding="async">
+                        {% else %}
+                            <div class="tournament-cover-placeholder">
+                                <span>Pas de couverture</span>
+                            </div>
+                        {% endif %}
+                        </div>
+                        <div class="profile-tournament-card-body">
+                            <div class="profile-tournament-meta">
+                                <span class="profile-tournament-badge">{{ tournoi.mode.value == 'theme_vs_theme' ? 'VS' : 'Classique' }}</span>
+                                <span class="profile-tournament-count">{{ tournoi.nombreElementsActifs }} éléments</span>
+                            </div>
+                            <h3 class="profile-tournament-title">{{ tournoi.nom }}</h3>
+                            <div class="profile-tournament-actions d-grid">
+                                <a class="btn btn-outline-primary btn-sm" href="{{ path('app_tournoi_edit', {id: tournoi.id}) }}">Reprendre le brouillon</a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <p class="mb-0 text-secondary">Tu n'as pas de brouillon en cours.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+{# Liste des tournois publiés (édition/suppression). #}
+<section class="card bg-body-tertiary border-secondary-subtle shadow-sm">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Mes tournois publiés</h2>
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3">
+            {% for tournoi in tournoisPublies %}
+                <div class="col">
+                    <article class="profile-tournament-card">
+                        <div class="tournament-cover-wrap tournament-cover-wrap-sm">
+                        {% if tournoi.coverImageUrl %}
+                            <img src="{{ tournoi.coverImageUrl }}" alt="Couverture de {{ tournoi.nom }}" class="tournament-cover-img" loading="lazy" decoding="async">
+                        {% else %}
+                            <div class="tournament-cover-placeholder">
+                                <span>Pas de couverture</span>
+                            </div>
+                        {% endif %}
+                        </div>
+                        <div class="profile-tournament-card-body">
+                            <div class="profile-tournament-meta">
+                                <span class="profile-tournament-badge {{ tournoi.mode.value == 'theme_vs_theme' ? 'is-vs' : '' }}">{{ tournoi.mode.value == 'theme_vs_theme' ? 'VS' : 'Classique' }}</span>
+                                <span class="profile-tournament-count">{{ tournoi.nombreElementsActifs }} éléments</span>
+                            </div>
+                            <h3 class="profile-tournament-title">{{ tournoi.nom }}</h3>
+                            <div class="profile-tournament-actions d-grid gap-2">
+                                <a class="btn btn-outline-light btn-sm" href="{{ path('app_tournoi_edit', {id: tournoi.id}) }}">Modifier</a>
+                                <form method="post" action="{{ path('app_tournoi_delete', {id: tournoi.id}) }}" class="js-confirm-delete-partie" data-confirm-message="Supprimer ce tournoi publié ? Cette action est définitive.">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('delete_tournoi_' ~ tournoi.id) }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">Supprimer</button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <p class="mb-0 text-secondary">Tu n'as pas encore publié de tournoi.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}
